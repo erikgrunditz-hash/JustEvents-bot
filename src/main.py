@@ -165,7 +165,11 @@ def sync(config: dict, dry_run: bool = False) -> None:
     )
 
 
-_STATUS_SCHEDULED = 1  # local alias used above
+# Discord GuildScheduledEvent status values
+_STATUS_SCHEDULED = 1
+_STATUS_ACTIVE = 2
+_STATUS_COMPLETED = 3
+_STATUS_CANCELLED = 4
 
 
 def _with_retry(fn, retries: int = 3, base_delay: float = 1.0):
