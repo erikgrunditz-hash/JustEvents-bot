@@ -89,7 +89,7 @@ class MeetupSource(BaseSource):
             timeout=30,
         )
         resp.raise_for_status()
-        return self._parse_ical(resp.text)
+        return self._parse_ical(resp.content.decode("utf-8"))
 
     def _parse_ical(self, content: str) -> List[Event]:
         cal = Calendar.from_ical(content)
@@ -167,7 +167,7 @@ class MeetupSource(BaseSource):
             timeout=30,
         )
         resp.raise_for_status()
-        return self._parse_rss(resp.text)
+        return self._parse_rss(resp.content.decode("utf-8"))
 
     def _parse_rss(self, content: str) -> List[Event]:
         logger.warning(
