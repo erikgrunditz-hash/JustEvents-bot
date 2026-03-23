@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Secrets — never commit these
+.env
+
+# Local config override (contains guild_id etc.)
+# If you prefer not to commit your config, add: config/config.yaml
+# By default config/config.yaml is tracked (it should NOT contain secrets).
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

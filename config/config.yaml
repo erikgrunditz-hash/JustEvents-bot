@@ -1,0 +1,48 @@
+# JustEvents configuration
+# Copy this file to config/config.yaml and fill in your settings.
+#
+# SECRETS go in the .env file (or as environment variables), NOT here.
+# .env is git-ignored; this file can safely be committed.
+
+# -------------------------------------------------------------------------
+# Discord
+# -------------------------------------------------------------------------
+discord:
+  # Your Discord server ID.
+  # Right-click your server name in Discord → "Copy Server ID"
+  # (Enable Developer Mode in Discord settings if this option is missing.)
+  guild_id: "1359628815327953227"
+
+  # Bot token is read from the DISCORD_BOT_TOKEN environment variable.
+  # Do not put it here.
+
+# -------------------------------------------------------------------------
+# Event sources
+# -------------------------------------------------------------------------
+# Add one entry per Meetup group (or other source) you want to mirror.
+# Supported source types: meetup
+#
+# Fields common to all sources:
+#   type          (required) Source type identifier.
+#   name          (required) Human-readable label shown in Discord event footers.
+#   lookahead_days           Override the global lookahead for this source.
+#   local_sample             Path to a local file for offline testing.
+#                            Provide an .ics file for accurate event times.
+
+sources:
+  - type: meetup
+    name: "Gothenburg Board Gamers (GoBo)"
+    group_slug: "gothenburg-board-gamers-gobo"
+    # prefer_ical: true   # Use iCal (default). Set false to force RSS (times unavailable).
+
+  # Template for adding another Meetup group:
+  # - type: meetup
+  #   name: "My Other Group"
+  #   group_slug: "my-other-group-slug"
+
+# -------------------------------------------------------------------------
+# Sync settings
+# -------------------------------------------------------------------------
+sync:
+  # Sync events starting within this many days from now.
+  lookahead_days: 30

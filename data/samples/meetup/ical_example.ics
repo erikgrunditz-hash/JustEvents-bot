@@ -1,0 +1,102 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//JustEvents//Test Data//EN
+X-WR-CALNAME:Events - Gothenburg Board Gamers (GoBo)
+X-WR-TIMEZONE:Europe/Stockholm
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VTIMEZONE
+TZID:Europe/Stockholm
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260325T180000
+DTEND;TZID=Europe/Stockholm:20260325T220000
+SUMMARY:Play board games with Gothenburg Boardgamers - Open for everyone
+DESCRIPTION:GoBo is a board game association for people of all ages and le
+ vels of experience. We provide locales to play in and boardgames (over 500
+  of them)\, have some snacks and drinks for sale and create different event
+ s.\n\nWe're located on Gyllenkrooksgatan 5\, to the left of the main entra
+ nce. Open every Wednesday 18–22 and every Saturday 12–22.\n\nVisiting us i
+ s always completely free the first time. Afterwards you can become a member
+  or pay a small fee each visit.\n\nFor more information: www.gothenburgboar
+ dgamers.se
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313853691/
+UID:event_313853691@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260328T120000
+DTEND;TZID=Europe/Stockholm:20260328T220000
+SUMMARY:Play board games with Gothenburg Boardgamers - Open for everyone
+DESCRIPTION:GoBo is a board game association for people of all ages and le
+ vels of experience. We provide locales to play in and boardgames (over 500
+  of them)\, have some snacks and drinks for sale and create different event
+ s.\n\nWe're located on Gyllenkrooksgatan 5\, to the left of the main entra
+ nce. Open every Wednesday 18–22 and every Saturday 12–22.\n\nVisiting us i
+ s always completely free the first time.
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313893179/
+UID:event_313893179@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260401T180000
+DTEND;TZID=Europe/Stockholm:20260401T220000
+SUMMARY:Blood on the Clocktower - Beginners Night (Swedish)
+DESCRIPTION:Blood on the Clocktower är ett socialt spel där två lag försök
+ er vinna. Vi spelar på svenska med det lättaste manuset och går igenom regl
+ erna grundligt.\n\nGratis för GoBo-medlemmar\, 50 kr för icke-medlemmar.
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313679525/
+UID:event_313679525@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260404T120000
+DTEND;TZID=Europe/Stockholm:20260404T160000
+SUMMARY:Simple and Social Gaming
+DESCRIPTION:A session for people who are new to board gaming or prefer sim
+ ple\, easy-to-learn rules. We will have games like Ticket to Ride\, Clank\,
+  Kingdomino\, Mysterium and more — with a light fika.
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313679836/
+UID:event_313679836@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260408T180000
+DTEND;TZID=Europe/Stockholm:20260408T220000
+SUMMARY:Play board games with Gothenburg Boardgamers - Open for everyone
+DESCRIPTION:Regular open gaming night — all welcome!
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313920000/
+UID:event_313920000@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Stockholm:20260410T120000
+DTEND;TZID=Europe/Stockholm:20260410T220000
+SUMMARY:Gaming in Lättsvenska
+DESCRIPTION:En speldag för dig som vill lära dig svenska medan du spelar s
+ ällskapsspel. Alla nivåer välkomna!
+URL:https://www.meetup.com/gothenburg-board-gamers-gobo/events/313739465/
+UID:event_313739465@meetup.com
+LOCATION:Gyllenkrooksgatan 5\, Gothenburg\, Sweden
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
