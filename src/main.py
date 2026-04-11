@@ -21,6 +21,7 @@ import requests
 
 from src.config import load_config
 from src.discord_client import DiscordClient
+from src.event_commands import format_event_create_command
 from src.models.event import Event
 from src.sources.base import BaseSource
 from src.sources.meetup import MeetupSource
@@ -39,6 +40,7 @@ SOURCE_REGISTRY: Dict[str, type] = {
 
 # How long to wait between Discord API calls to avoid rate limits (seconds).
 _DISCORD_CALL_DELAY = 0.5
+_COMMAND_CREATION_METHODS = {"sesh", "justevent"}
 
 
 def _build_sources(sources_config: list) -> List[BaseSource]:
@@ -104,10 +106,65 @@ def sync(config: dict, dry_run: bool = False) -> None:
         if source_id:
             existing_by_source_id[source_id] = de
 
-    created = updated = cancelled = skipped = 0
+    created = updated = cancelled = skipped = failed = 0
 
     # ---- Create or update events --------------------------------------------------------
     for source_id, event in incoming_by_id.items():
+        method = (event.event_creation_method or "direct").lower()
+        if method not in {"direct", "sesh", "justevent"}:
+            logger.warning(
+                "Unknown event_creation_method=%r for %r; falling back to direct.",
+                event.event_creation_method,
+                source_id,
+            )
+            method = "direct"
+
+        if method in _COMMAND_CREATION_METHODS:
+            if source_id in existing_by_source_id:
+                logger.info(
+                    "Skipping existing event in %s mode: %r",
+                    method,
+                    event.title,
+                )
+                skipped += 1
+                continue
+
+            command_channel_id = (event.command_channel_id or "").strip()
+            if not command_channel_id:
+                logger.error(
+                    "Cannot create %r in %s mode: missing command_channel_id in source config.",
+                    event.title,
+                    method,
+                )
+                failed += 1
+                continue
+
+            command = format_event_create_command(event, include_channel=(method == "justevent"))
+            if dry_run:
+                logger.info("[DRY RUN] Would post %s command: %s", method, command)
+                created += 1
+                continue
+
+            logger.info("Posting %s command for %r", method, event.title)
+            _with_retry(lambda cid=command_channel_id, cmd=command: client.send_channel_message(cid, cmd))
+            time.sleep(_DISCORD_CALL_DELAY)
+            created += 1
+
+            if method == "justevent":
+                ack_timeout = max(0, int(event.command_ack_timeout_seconds or 0))
+                if ack_timeout > 0:
+                    if _wait_for_event_creation(client, source_id, timeout_seconds=ack_timeout):
+                        logger.info("JustEvent listener confirmed event creation for source_id=%s", source_id)
+                    else:
+                        logger.error(
+                            "No JustEvent creation ack within %ss for source_id=%s. "
+                            "The listener bot may be offline or missing permissions.",
+                            ack_timeout,
+                            source_id,
+                        )
+                        failed += 1
+            continue
+
         if source_id in existing_by_source_id:
             de = existing_by_source_id[source_id]
             discord_id = de["id"]
@@ -145,6 +202,14 @@ def sync(config: dict, dry_run: bool = False) -> None:
     # ---- Cancel events that no longer appear in any source --------------------------------
     for source_id, de in existing_by_source_id.items():
         if source_id not in incoming_by_id:
+            existing_method = (
+                DiscordClient.extract_creation_method(de.get("description") or "")
+                or "direct"
+            )
+            if existing_method in _COMMAND_CREATION_METHODS:
+                skipped += 1
+                continue
+
             status = de.get("status", _STATUS_SCHEDULED)
             if status == _STATUS_SCHEDULED:
                 name = de.get("name", "?")
@@ -161,7 +226,7 @@ def sync(config: dict, dry_run: bool = False) -> None:
     label = "[DRY RUN] " if dry_run else ""
     logger.info(
         f"{label}Sync complete — "
-        f"{created} created, {updated} updated, {cancelled} cancelled, {skipped} skipped."
+        f"{created} created, {updated} updated, {cancelled} cancelled, {skipped} skipped, {failed} failed."
     )
 
 
@@ -198,6 +263,26 @@ def _with_retry(fn, retries: int = 3, base_delay: float = 1.0):
             wait = base_delay * (attempt + 1)
             logger.warning(f"Error on attempt {attempt + 1}/{retries}: {exc} — retrying in {wait}s")
             time.sleep(wait)
+
+
+def _wait_for_event_creation(client: DiscordClient, source_id: str, timeout_seconds: int) -> bool:
+    """Poll Discord events for up to ``timeout_seconds`` looking for ``source_id``."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            events = client.get_scheduled_events()
+        except Exception as exc:
+            logger.warning("Ack poll failed while waiting for source_id=%s: %s", source_id, exc)
+            time.sleep(2)
+            continue
+
+        for discord_event in events:
+            existing_source_id = DiscordClient.extract_source_id(discord_event.get("description") or "")
+            if existing_source_id == source_id:
+                return True
+
+        time.sleep(2)
+    return False
 
 
 def main() -> None:

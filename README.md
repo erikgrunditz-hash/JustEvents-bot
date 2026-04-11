@@ -1,8 +1,14 @@
 # JustEvents
 
-A lightweight bot that mirrors events from external websites (starting with [Meetup.com](https://meetup.com)) into Discord as **Scheduled Events**.
+A lightweight event mirroring tool that syncs external events (starting with [Meetup.com](https://meetup.com)) into Discord.
 
-It is designed to be run on a schedule — once a day is plenty — and requires no persistent server process. It can run via GitHub Actions, a cron job on a Raspberry Pi, or any regular PC.
+It is designed to be run on a schedule (once a day is plenty) and supports three creation modes:
+
+- `direct` — create/update/cancel native Discord Scheduled Events via Discord API.
+- `sesh` — generate and post Sesh-style `/create ...` commands to a channel.
+- `justevent` — generate and post `/create ...` commands that a long-running JustEvent listener can consume.
+
+You can run scheduled sync from GitHub Actions/cron today, and add the long-running listener later when you have a server.
 
 ---
 
@@ -18,13 +24,13 @@ Meetup.com (iCal feed)
     src/main.py        ← compares against existing Discord events
         │
         ▼
-  DiscordClient        ← creates / updates / cancels Discord Scheduled Events
+  Event creation mode  ← direct API OR Sesh command OR JustEvent command
         │
         ▼
   Discord Guild        ← events appear in the server's Events tab
 ```
 
-Each event posted to Discord contains an embedded `source_id` in its description (e.g. `source_id: meetup:313653098`). On the next sync run, the bot reads this marker back from Discord to avoid creating duplicates.
+Each event description includes metadata markers such as `source_id:` and `creation_method:`. On the next sync run, JustEvents reads them back to avoid duplicates and make safer decisions per mode.
 
 ---
 
@@ -32,7 +38,11 @@ Each event posted to Discord contains an embedded `source_id` in its description
 
 - Python 3.11 or later
 - A Discord server where you can add a bot
-- A Discord Application / Bot token with the **Manage Events** permission
+- A Discord Application / Bot token
+- Discord permissions:
+  - `Manage Events` (required for `direct` mode and JustEvent listener-created native events)
+  - `Send Messages` (required for `sesh` and `justevent` command-posting modes)
+  - `Read Message History` + Message Content Intent (required for the optional JustEvent listener)
 
 ---
 
@@ -42,13 +52,17 @@ Each event posted to Discord contains an embedded `source_id` in its description
 2. Under **Bot**, click **Add Bot** and copy the **Token** — you will need this later.
 3. Under **OAuth2 → URL Generator**, tick:
    - Scopes: `bot`
-   - Bot permissions: `Manage Events`
+  - Bot permissions: `Manage Events`, `Send Messages`, `Read Message History`
 4. Open the generated URL in a browser, choose your server, and authorise the bot.
 
-> **Tip — finding your Server ID:**
-> In Discord, open *Settings → Advanced* and enable **Developer Mode**.
-> Then right-click your server name and choose **Copy Server ID**.
+**For JustEvent listener mode:** If you plan to run the long-running JustEvent listener, you must also enable **Message Content Intent** in the Developer Portal:
+   - Go to your application page at https://discord.com/developers/applications/
+   - Select your application
+   - Go to **Bot** in the left sidebar
+   - Under **Privileged Gateway Intents**, toggle **Message Content Intent** ON
+   - Save changes
 
+Without this, the listener will fail to start with `PrivilegedIntentsRequired` error.
 ---
 
 ## Step 2 — Local setup
@@ -100,9 +114,25 @@ sources:
   - type: meetup
     name: "Gothenburg Board Gamers (GoBo)"
     group_slug: "gothenburg-board-gamers-gobo"
+    event_creation_method: "direct" # direct, sesh, justevent
+    # command_channel_id: "123456789012345678"  # required for sesh/justevent if no global default
+    # command_target_channel: "#events"         # inserted into generated /create command
+    # default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
+    # command_ack_timeout_seconds: 30            # justevent only: wait for listener confirmation
 
 sync:
   lookahead_days: 90
+  default_event_creation_method: "direct"
+```
+
+Optional global command channel defaults:
+
+```yaml
+discord:
+  command:
+    default_channel_id: "123456789012345678"
+  justevent_listener:
+    listen_channel_id: "123456789012345678"
 ```
 
 The `guild_id` in `config.yaml` is not a secret. The bot token must stay in `.env` only.
@@ -118,6 +148,8 @@ See what would be created/updated without actually touching Discord:
 ```bash
 python -m src.main --dry-run
 ```
+
+In `sesh` and `justevent` modes, dry-run prints command payloads without posting them.
 
 ### Test with local sample files (no internet required)
 
@@ -146,7 +178,7 @@ pytest tests/ -v
 
 ---
 
-## Step 4 — Run the bot
+## Step 4 — Run sync
 
 ```bash
 python -m src.main
@@ -155,7 +187,35 @@ python -m src.main
 The bot will:
 1. Fetch events from all configured sources.
 2. Query your Discord guild for existing scheduled events that were previously created by JustEvents.
-3. **Create** new events, **update** changed ones, and **cancel** events that have been removed from the source.
+3. Execute actions according to each source's `event_creation_method`:
+  - `direct`: create/update/cancel native Discord events.
+  - `sesh`: post a Sesh-style `/create ...` command message.
+  - `justevent`: post a `/create ...` command message for the JustEvent listener.
+
+### Optional: Run the JustEvent listener (server mode)
+
+When you have a server available and have [enabled Message Content Intent](#for-justevent-listener-mode) in the Discord Developer Portal, start the listener:
+
+```bash
+python -m src.justevent_listener
+```
+
+The listener provides two ways to create events:
+
+1. **Auto-posted commands from sync jobs** — When sync job runs in `justevent` mode, it automatically posts formatted commands to the listener channel, and the listener automatically creates events from them.
+
+2. **Manual slash command** — Use `/create` slash command directly in any channel to manually create events:
+   ```
+   /create title: Event Name datetime: 2026-04-12 10:00 UTC description: Event details duration: 2h location: Venue name
+   ```
+
+The listener:
+- Watches the channel specified in `discord.justevent_listener.listen_channel_id` for auto-posted commands
+- Registers a `/create` slash command for manual use
+- Automatically creates native Discord scheduled events
+- Handles rate limiting with exponential backoff
+- Logs confirmation or error messages to the channel
+- Remains running indefinitely to process commands as they arrive
 
 ---
 
@@ -173,7 +233,12 @@ The workflow at [.github/workflows/sync_events.yml](.github/workflows/sync_event
    - `DISCORD_GUILD_ID` — your server ID
 3. The workflow starts running on the next scheduled trigger.
 
-You can also trigger it manually from the **Actions** tab, with an optional **dry run** toggle.
+You can also trigger it manually from the **Actions** tab, with:
+
+- `dry_run` toggle
+- `event_creation_method` override (`direct`, `sesh`, `justevent`)
+
+The workflow now runs tests in a matrix across all three methods before the sync job.
 
 ### Option B — Raspberry Pi or Linux server (cron)
 
@@ -272,7 +337,9 @@ JustEvents/
 │       └── meetup.py              # Meetup.com iCal / RSS source
 │
 ├── tests/
-│   └── test_meetup_source.py      # Parser unit tests
+│   ├── test_meetup_source.py      # Meetup source parser unit tests
+│   ├── test_config_creation_methods.py    # Config propagation and validation tests
+│   └── test_event_commands.py   # Command formatting and parsing tests
 │
 └── .github/
     └── workflows/
@@ -310,9 +377,22 @@ Each description ends with:
 ```
 🔗 *Mirrored from <Source Name>*
 source_id: meetup:<event_id>
+creation_method: <direct|sesh|justevent>
 ```
 
-The `source_id:` line is used internally to match Discord events back to their source on subsequent runs.
+The metadata footer is used internally to match and process events safely on subsequent runs.
+
+### Command payload format (`sesh` / `justevent`)
+
+Command-based modes emit this format:
+
+```text
+/create title: title datetime: YYYY-MM-DD HH:MM UTC description: description duration: 2h location: location channel: #events
+```
+
+**Sesh mode:** Posts command templates as plain text messages to a Discord channel. Your team copies the `/create ...` command text and manually pastes it into Discord to execute. This is the expected workflow—Discord restricts bots from executing slash commands as interactions, so using Sesh with manual copy-paste is the intended temporary solution until the JustEvent listener is deployed.
+
+**JustEvent mode:** Posts command payloads that the long-running JustEvent listener bot automatically watches for, parses, and processes to create native Discord events (requires the listener to be running on a server). No manual intervention needed.
 
 ---
 
@@ -325,7 +405,42 @@ The `source_id:` line is used internally to match Discord events back to their s
 → Copy `config/config.example.yaml` to `config/config.yaml`.
 
 **`403 Forbidden` from Discord API**
-→ The bot is missing the **Manage Events** permission in your server. Re-invite it using the OAuth2 URL Generator with that permission checked.
+→ The bot is missing required permissions (`Manage Events` and/or `Send Messages`). Re-invite it with the permissions listed above.
+
+**JustEvent command posted, but no event was created**
+→ Check that:
+   1. The listener process is running: `python -m src.justevent_listener`
+   2. The listener config points to the correct channel: `discord.justevent_listener.listen_channel_id`
+   3. **Message Content Intent is enabled** in the Developer Portal (see [For JustEvent listener mode](#for-justevent-listener-mode))
+   4. The bot has `Manage Events` permission in your server
+
+If `command_ack_timeout_seconds` is set in your config, sync logs an explicit failure when no confirmation is detected in time.
+
+**Using the /create slash command**
+→ Once the listener is running, you can manually use `/create` in any Discord channel:
+   - `title` — Event name (required)
+   - `datetime` — Date and time. Formats:
+     - `YYYY-MM-DD` (e.g., `2026-04-12` — defaults to 10:00 UTC)
+     - `YYYY-MM-DD HH:MM` (e.g., `2026-04-12 14:30`)
+   - `description` — Event details (required)
+   - `duration` — Event length. Formats: `2h`, `30m`, `1h30m` (required)
+   - `location` — Physical location (required)
+   
+   The listener will automatically create the event and respond with confirmation. Responses are ephemeral (only visible to you).
+
+**"I don't see a /create slash command for JustEvent"**
+→ Make sure:
+   1. The listener is running: `python -m src.justevent_listener`
+   2. **Message Content Intent is enabled** in the Developer Portal
+   3. Give it a moment for Discord to sync the commands (up to 1 hour, but usually seconds)
+
+**Sesh mode posted command text, but event was not auto-created**
+→ This is expected! Sesh mode posts command templates as plain text. Your team must manually:
+   1. Copy the posted command text
+   2. Paste it into Discord
+   3. Press Enter to execute the `/create ...` slash command
+
+This is the expected temporary workflow until you deploy the JustEvent listener.
 
 **`404 Not Found` when fetching Meetup iCal**
 → Check that `group_slug` in your config matches the slug in the Meetup URL (e.g. `gothenburg-board-gamers-gobo`).

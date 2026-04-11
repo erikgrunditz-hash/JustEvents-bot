@@ -32,7 +32,11 @@ _DESC_LIMIT = 1000
 
 # Marker appended to every Discord event description so we can recognise
 # events that were created by this bot and match them back to their source.
-_SOURCE_FOOTER_TEMPLATE = "\n\n🔗 *Mirrored from {source_name}*\nsource_id: {source_id}"
+_SOURCE_FOOTER_TEMPLATE = (
+    "\n\n🔗 *Mirrored from {source_name}*\n"
+    "source_id: {source_id}\n"
+    "creation_method: {creation_method}"
+)
 
 
 class MeetupSource(BaseSource):
@@ -49,6 +53,14 @@ class MeetupSource(BaseSource):
         # Path to a local sample file; used for offline / dry-run testing.
         self._local_sample: Optional[str] = config.get("local_sample")
         self._lookahead_days: int = config.get("lookahead_days", 90)
+        self._include_past_events: bool = bool(
+            config.get("include_past_events", bool(self._local_sample))
+        )
+        self._event_creation_method: str = str(config.get("event_creation_method", "direct")).lower()
+        self._command_channel_id: Optional[str] = config.get("command_channel_id")
+        self._command_target_channel: Optional[str] = config.get("command_target_channel", "#events")
+        self._default_location: Optional[str] = config.get("default_location")
+        self._command_ack_timeout_seconds: int = int(config.get("command_ack_timeout_seconds", 0) or 0)
 
     # ------------------------------------------------------------------
     # BaseSource interface
@@ -120,7 +132,7 @@ class MeetupSource(BaseSource):
             return None
 
         start_dt = self._to_aware_datetime(dtstart.dt)
-        if start_dt < now or start_dt > cutoff:
+        if (start_dt < now and not self._include_past_events) or start_dt > cutoff:
             return None
 
         dtend = comp.get("DTEND")
@@ -142,7 +154,7 @@ class MeetupSource(BaseSource):
         raw_desc = str(comp.get("DESCRIPTION", "")).strip()
         description = self._build_description(raw_desc, source_id)
 
-        location = str(comp.get("LOCATION", "")).strip() or None
+        location = str(comp.get("LOCATION", "")).strip() or self._default_location or None
 
         return Event(
             source_id=source_id,
@@ -153,6 +165,10 @@ class MeetupSource(BaseSource):
             end_time=end_dt,
             location=location,
             source_name=self._name,
+            event_creation_method=self._event_creation_method,
+            command_channel_id=self._command_channel_id,
+            command_target_channel=self._command_target_channel,
+            command_ack_timeout_seconds=self._command_ack_timeout_seconds,
         )
 
     # ------------------------------------------------------------------
@@ -219,6 +235,11 @@ class MeetupSource(BaseSource):
             start_time=start_dt,
             end_time=end_dt,
             source_name=self._name,
+            location=self._default_location,
+            event_creation_method=self._event_creation_method,
+            command_channel_id=self._command_channel_id,
+            command_target_channel=self._command_target_channel,
+            command_ack_timeout_seconds=self._command_ack_timeout_seconds,
         )
 
     # ------------------------------------------------------------------
@@ -245,6 +266,7 @@ class MeetupSource(BaseSource):
         footer = _SOURCE_FOOTER_TEMPLATE.format(
             source_name=self._name,
             source_id=source_id,
+            creation_method=self._event_creation_method,
         )
         available = _DESC_LIMIT - len(footer)
         body = _clean_text(raw)

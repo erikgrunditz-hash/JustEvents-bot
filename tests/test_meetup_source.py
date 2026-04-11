@@ -163,3 +163,15 @@ class TestExtractSourceId:
         from src.discord_client import DiscordClient
         assert DiscordClient.extract_source_id("") is None
         assert DiscordClient.extract_source_id(None) is None
+
+
+class TestExtractCreationMethod:
+    def test_extracts_creation_method_line(self):
+        from src.discord_client import DiscordClient
+        desc = "Some event description\ncreation_method: justevent"
+        assert DiscordClient.extract_creation_method(desc) == "justevent"
+
+    def test_returns_none_for_no_marker(self):
+        from src.discord_client import DiscordClient
+        desc = "A Discord event without creation method marker"
+        assert DiscordClient.extract_creation_method(desc) is None

@@ -39,6 +39,18 @@ class Event:
     # Optional RSVP count scraped from the source.
     rsvp_count: Optional[int] = None
 
+    # How this event should be created in Discord: direct, sesh, or justevent.
+    event_creation_method: str = "direct"
+
+    # Channel ID where command messages should be posted (sesh/justevent modes).
+    command_channel_id: Optional[str] = None
+
+    # Target event channel mention used inside command payload (for sesh UX).
+    command_target_channel: Optional[str] = None
+
+    # How long the sync job should wait for command-processing confirmation.
+    command_ack_timeout_seconds: int = 0
+
     def __post_init__(self) -> None:
         if self.start_time.tzinfo is None:
             raise ValueError(f"start_time must be timezone-aware (event: {self.title!r})")

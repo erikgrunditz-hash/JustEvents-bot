@@ -11,10 +11,46 @@ on:
         description: "Dry run — preview changes without posting to Discord"
         type: boolean
         default: false
+      event_creation_method:
+        description: "Default creation method for sources without an explicit override"
+        type: choice
+        options:
+          - direct
+          - sesh
+          - justevent
+        default: direct
 
 jobs:
+  tests:
+    name: Tests (${{ matrix.creation_method }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        creation_method: [direct, sesh, justevent]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          JUSTEVENTS_DEFAULT_EVENT_CREATION_METHOD: ${{ matrix.creation_method }}
+        run: pytest tests/ -v
   sync:
     name: Sync events
+    needs: tests
     runs-on: ubuntu-latest
 
     steps:
@@ -34,6 +70,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+          JUSTEVENTS_DEFAULT_EVENT_CREATION_METHOD: ${{ github.event.inputs.event_creation_method || 'direct' }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             python -m src.main --dry-run

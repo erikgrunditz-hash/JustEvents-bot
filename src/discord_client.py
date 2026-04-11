@@ -26,6 +26,7 @@ _API_BASE = "https://discord.com/api/v10"
 # Marker prefix that we embed in Discord event descriptions so we can match
 # Discord events back to their source without a separate state file.
 _SOURCE_ID_MARKER = "source_id: "
+_CREATION_METHOD_MARKER = "creation_method: "
 
 # Discord field limits
 _NAME_LIMIT = 100
@@ -98,6 +99,15 @@ class DiscordClient:
         )
         _raise_for_status(resp)
 
+    def send_channel_message(self, channel_id: str, content: str) -> dict:
+        """Send a plain text message to a Discord text channel."""
+        resp = self._session.post(
+            f"{_API_BASE}/channels/{channel_id}/messages",
+            json={"content": content},
+        )
+        _raise_for_status(resp)
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Static helpers
     # ------------------------------------------------------------------
@@ -112,6 +122,15 @@ class DiscordClient:
             stripped = line.strip()
             if stripped.startswith(_SOURCE_ID_MARKER):
                 return stripped[len(_SOURCE_ID_MARKER):].strip()
+        return None
+
+    @staticmethod
+    def extract_creation_method(discord_description: str) -> Optional[str]:
+        """Read the ``creation_method:`` line from a Discord event description."""
+        for line in (discord_description or "").splitlines():
+            stripped = line.strip().lower()
+            if stripped.startswith(_CREATION_METHOD_MARKER):
+                return stripped[len(_CREATION_METHOD_MARKER):].strip()
         return None
 
 
