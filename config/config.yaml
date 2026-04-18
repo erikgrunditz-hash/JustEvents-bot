@@ -11,21 +11,21 @@ discord:
   # Your Discord server ID.
   # Right-click your server name in Discord → "Copy Server ID"
   # (Enable Developer Mode in Discord settings if this option is missing.)
-  guild_id: "YOUR_GUILD_ID_HERE"
+  guild_id: "911665744834596894"
 
   # Bot token is read from the DISCORD_BOT_TOKEN environment variable.
-  # Do not put it here.
+  # Do not put it here. 
 
   # Settings for command-based event creation modes (sesh/justevent).
   command:
     # Default channel where command messages are posted.
     # Can be overridden per source with command_channel_id.
-    default_channel_id: "1492574599756386445"
+    default_channel_id: ""
 
   # Optional settings for long-running JustEvent listener mode.
   justevent_listener:
     # Channel ID the listener watches for /create command payloads.
-    listen_channel_id: "1492574599756386445"
+    listen_channel_id: ""
 
 # -------------------------------------------------------------------------
 # Event sources
@@ -51,9 +51,9 @@ sources:
     name: "Gothenburg Board Gamers (GoBo)"
     group_slug: "gothenburg-board-gamers-gobo"
     event_creation_method: "sesh" # direct, sesh, or justevent
-    # command_channel_id: "123456789012345678"
-    # command_target_channel: "#events"
-    default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
+    # command_channel_id: "1494973306166841445" 
+    # command_target_channel: "#justevents-messages"
+    # default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
     # command_ack_timeout_seconds: 30
     # prefer_ical: true   # Use iCal (default). Set false to force RSS (times unavailable).
 
@@ -67,6 +67,6 @@ sources:
 # -------------------------------------------------------------------------
 sync:
   # Sync events starting within this many days from now.
-  lookahead_days: 30
+  lookahead_days: 90
   # Default method for all sources that do not specify event_creation_method.
-  default_event_creation_method: "sesh"
+  default_event_creation_method: "direct"
