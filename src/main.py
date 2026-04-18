@@ -87,7 +87,17 @@ def sync(config: dict, dry_run: bool = False) -> None:
             logger.error(f"  Failed to fetch from {source.name!r}: {exc}")
 
     incoming_by_id: Dict[str, Event] = {e.source_id: e for e in incoming}
+    # ---- EXCLUDE EVENTS BY NAME -------------------------------------------------
+    EXCLUDED_NAMES = [
+        "Play board games with Gothenburg Boardgamers - Open for everyone",
+        "private event",
+    ]
 
+    incoming_by_id = {
+        sid: event
+        for sid, event in incoming_by_id.items()
+        if not any(ex.lower() in event.title.lower() for ex in EXCLUDED_NAMES)
+    }
     # ---- Fetch existing Discord scheduled events ----------------------------------------
     logger.info("Fetching existing Discord scheduled events ...")
     if dry_run:
