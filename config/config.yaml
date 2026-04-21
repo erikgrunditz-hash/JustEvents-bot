@@ -20,7 +20,7 @@ discord:
   command:
     # Default channel where command messages are posted.
     # Can be overridden per source with command_channel_id.
-    default_channel_id: ""
+    default_channel_id: "1494973306166841445"
 
   # Optional settings for long-running JustEvent listener mode.
   justevent_listener:
@@ -51,9 +51,9 @@ sources:
     name: "Gothenburg Board Gamers (GoBo)"
     group_slug: "gothenburg-board-gamers-gobo"
     event_creation_method: "sesh" # direct, sesh, or justevent
-    # command_channel_id: "1494973306166841445" 
+    command_channel_id: "1494973306166841445" 
     # command_target_channel: "#justevents-messages"
-    # default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
+    default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
     # command_ack_timeout_seconds: 30
     # prefer_ical: true   # Use iCal (default). Set false to force RSS (times unavailable).
 
@@ -69,4 +69,4 @@ sync:
   # Sync events starting within this many days from now.
   lookahead_days: 90
   # Default method for all sources that do not specify event_creation_method.
-  default_event_creation_method: "direct"
+  default_event_creation_method: "sesh"

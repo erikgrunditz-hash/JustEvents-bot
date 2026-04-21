@@ -64,7 +64,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
-          JUSTEVENTS_DEFAULT_EVENT_CREATION_METHOD: ${{ github.event.inputs.event_creation_method || 'direct' }}
+          JUSTEVENTS_DEFAULT_EVENT_CREATION_METHOD: ${{ github.event.inputs.event_creation_method }}
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             python -m src.main --dry-run
