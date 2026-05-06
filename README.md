@@ -123,6 +123,11 @@ sources:
 sync:
   lookahead_days: 90
   default_event_creation_method: "direct"
+   exclude_title_contains: []
+   similarity_matching:
+      time_window_minutes: 180
+      min_title_ratio: 0.55
+      min_score: 0.72
 ```
 
 Optional global command channel defaults:
@@ -136,6 +141,17 @@ discord:
 ```
 
 The `guild_id` in `config.yaml` is not a secret. The bot token must stay in `.env` only.
+
+Similarity-matching settings are useful when source-side event IDs drift because of title/description edits. Keep them under `sync.similarity_matching` so dedupe behavior is predictable:
+
+- `time_window_minutes` — maximum allowed start-time difference.
+- `min_title_ratio` — minimum fuzzy title similarity ratio (`0..1`) when not nearly same-time.
+- `min_score` — minimum combined score (time + title) required to treat two events as the same.
+
+Optional title exclusions can be configured under `sync.exclude_title_contains`.
+
+- Events with matching title terms are skipped for create/update.
+- They are also protected from auto-cancellation (so filters do not accidentally delete existing Discord events).
 
 ---
 

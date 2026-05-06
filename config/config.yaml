@@ -51,8 +51,8 @@ sources:
     name: "Gothenburg Board Gamers (GoBo)"
     group_slug: "gothenburg-board-gamers-gobo"
     event_creation_method: "sesh" # direct, sesh, or justevent
-    command_channel_id: "1494973306166841445" 
-    # command_target_channel: "#justevents-messages"
+    command_channel_id: "1494973306166841445"
+    command_target_channel: "#justevents-messages"
     default_location: "Gothenburg Boardgamers, Gyllenkrooksgatan, Gothenburg, Sweden"
     # command_ack_timeout_seconds: 30
     # prefer_ical: true   # Use iCal (default). Set false to force RSS (times unavailable).
@@ -67,6 +67,14 @@ sources:
 # -------------------------------------------------------------------------
 sync:
   # Sync events starting within this many days from now.
-  lookahead_days: 90
+  lookahead_days: 14
   # Default method for all sources that do not specify event_creation_method.
   default_event_creation_method: "sesh"
+  # Fallback matching when source IDs drift (renames/edited text on source side).
+  similarity_matching:
+    # Max allowed start-time difference between incoming and existing Discord event.
+    time_window_minutes: 180
+    # Minimum fuzzy title similarity ratio (0..1) for non-near-in-time matches.
+    min_title_ratio: 0.55
+    # Minimum combined score (time + title) required to treat events as the same.
+    min_score: 0.72

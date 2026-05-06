@@ -30,14 +30,6 @@ logger = logging.getLogger(__name__)
 _NAME_LIMIT = 100
 _DESC_LIMIT = 1000
 
-# Marker appended to every Discord event description so we can recognise
-# events that were created by this bot and match them back to their source.
-_SOURCE_FOOTER_TEMPLATE = (
-    "\n\n🔗 *Mirrored from {source_name}*\n"
-    "source_id: {source_id}\n"
-    "creation_method: {creation_method}"
-)
-
 
 class MeetupSource(BaseSource):
     """Event source that reads from a Meetup.com group calendar."""
@@ -262,17 +254,20 @@ class MeetupSource(BaseSource):
     # ------------------------------------------------------------------
 
     def _build_description(self, raw: str, source_id: str) -> str:
-        """Truncate description and append the source footer."""
-        footer = _SOURCE_FOOTER_TEMPLATE.format(
-            source_name=self._name,
-            source_id=source_id,
-            creation_method=self._event_creation_method,
-        )
-        available = _DESC_LIMIT - len(footer)
+        """Build a Discord-safe description with metadata markers for dedupe."""
         body = _clean_text(raw)
-        if len(body) > available:
-            body = body[: available - 1] + "…"
-        return body + footer
+        footer = f"\n\nsource_id: {source_id}\ncreation_method: {self._event_creation_method}"
+
+        max_body_len = max(0, _DESC_LIMIT - len(footer))
+        if len(body) > max_body_len:
+            if max_body_len > 1:
+                body = body[: max_body_len - 1] + "…"
+            else:
+                body = ""
+
+        if body:
+            return f"{body}{footer}"
+        return footer.lstrip()
 
     @staticmethod
     def _extract_meetup_id(url: str) -> Optional[str]:

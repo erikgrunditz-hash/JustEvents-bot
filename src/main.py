@@ -12,6 +12,8 @@ Adding a new source type:
 """
 
 import argparse
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
 import logging
 import sys
 import time
@@ -41,6 +43,11 @@ SOURCE_REGISTRY: Dict[str, type] = {
 # How long to wait between Discord API calls to avoid rate limits (seconds).
 _DISCORD_CALL_DELAY = 0.5
 _COMMAND_CREATION_METHODS = {"sesh", "justevent"}
+_DEFAULT_SIMILARITY_TIME_WINDOW_MINUTES = 180
+_DEFAULT_SIMILARITY_MIN_TITLE_RATIO = 0.55
+_DEFAULT_SIMILARITY_MIN_SCORE = 0.72
+_UNTRACKED_COMMAND_MATCH_TIME_WINDOW_MINUTES = 90
+_UNTRACKED_COMMAND_MIN_TITLE_RATIO = 0.8
 
 
 def _build_sources(sources_config: list) -> List[BaseSource]:
@@ -53,6 +60,105 @@ def _build_sources(sources_config: list) -> List[BaseSource]:
             continue
         sources.append(cls(cfg))
     return sources
+
+
+def _source_prefix(source_id: str) -> str:
+    return (source_id or "").split(":", 1)[0].lower()
+
+
+def _normalise_title(title: str) -> str:
+    lowered = (title or "").lower()
+    cleaned = "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in lowered)
+    return " ".join(cleaned.split())
+
+
+def _title_similarity(left: str, right: str) -> float:
+    return SequenceMatcher(None, _normalise_title(left), _normalise_title(right)).ratio()
+
+
+def _parse_discord_start(discord_event: dict) -> datetime | None:
+    raw = (discord_event.get("scheduled_start_time") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _find_similar_existing_event(
+    incoming_event: Event,
+    existing_discord: List[dict],
+    used_discord_ids: set[str],
+    *,
+    time_window_minutes: int,
+    min_title_ratio: float,
+    min_score: float,
+) -> dict | None:
+    incoming_prefix = _source_prefix(incoming_event.source_id)
+    if not incoming_prefix:
+        return None
+
+    best_candidate = None
+    best_score = -1.0
+    incoming_start = incoming_event.start_time.astimezone(timezone.utc)
+    incoming_method = (incoming_event.event_creation_method or "direct").lower()
+
+    for discord_event in existing_discord:
+        discord_id = discord_event.get("id")
+        if not discord_id or discord_id in used_discord_ids:
+            continue
+
+        existing_source_id = DiscordClient.extract_source_id(discord_event.get("description") or "")
+        if existing_source_id:
+            if _source_prefix(existing_source_id) != incoming_prefix:
+                continue
+
+            existing_method = (
+                DiscordClient.extract_creation_method(discord_event.get("description") or "")
+                or "direct"
+            ).lower()
+            if existing_method != incoming_method:
+                continue
+        else:
+            # Sesh/manual-created events may have no metadata footer. For command-based
+            # modes we still want to suppress duplicates by matching title/time only.
+            if incoming_method not in _COMMAND_CREATION_METHODS:
+                continue
+
+        existing_start = _parse_discord_start(discord_event)
+        if existing_start is None:
+            continue
+
+        diff_minutes = abs((incoming_start - existing_start).total_seconds()) / 60
+        active_time_window = time_window_minutes
+        if not existing_source_id:
+            active_time_window = min(
+                time_window_minutes,
+                _UNTRACKED_COMMAND_MATCH_TIME_WINDOW_MINUTES,
+            )
+
+        if diff_minutes > active_time_window:
+            continue
+
+        title_ratio = _title_similarity(incoming_event.title, discord_event.get("name", ""))
+        active_min_title_ratio = min_title_ratio
+        if not existing_source_id:
+            active_min_title_ratio = max(min_title_ratio, _UNTRACKED_COMMAND_MIN_TITLE_RATIO)
+
+        if title_ratio < active_min_title_ratio:
+            continue
+
+        time_score = 1.0 - (diff_minutes / active_time_window)
+        score = (0.7 * time_score) + (0.3 * title_ratio)
+        if score >= min_score and score > best_score:
+            best_score = score
+            best_candidate = discord_event
+
+    return best_candidate
 
 
 def sync(config: dict, dry_run: bool = False) -> None:
@@ -70,6 +176,21 @@ def sync(config: dict, dry_run: bool = False) -> None:
 
     client = DiscordClient(bot_token=bot_token, guild_id=guild_id)
     sources = _build_sources(config.get("sources", []))
+    similarity_cfg = config.get("sync", {}).get("similarity_matching", {})
+    similarity_time_window_minutes = int(
+        similarity_cfg.get("time_window_minutes", _DEFAULT_SIMILARITY_TIME_WINDOW_MINUTES)
+    )
+    similarity_min_title_ratio = float(
+        similarity_cfg.get("min_title_ratio", _DEFAULT_SIMILARITY_MIN_TITLE_RATIO)
+    )
+    similarity_min_score = float(
+        similarity_cfg.get("min_score", _DEFAULT_SIMILARITY_MIN_SCORE)
+    )
+    excluded_title_terms = [
+        str(term).strip().lower()
+        for term in config.get("sync", {}).get("exclude_title_contains", [])
+        if str(term).strip()
+    ]
 
     if not sources:
         logger.warning("No sources configured. Add entries under 'sources:' in config.yaml.")
@@ -87,17 +208,22 @@ def sync(config: dict, dry_run: bool = False) -> None:
             logger.error(f"  Failed to fetch from {source.name!r}: {exc}")
 
     incoming_by_id: Dict[str, Event] = {e.source_id: e for e in incoming}
-    # ---- EXCLUDE EVENTS BY NAME -------------------------------------------------
-    EXCLUDED_NAMES = [
-        "Play board games with Gothenburg Boardgamers - Open for everyone",
-        "private event",
-    ]
+    # ---- Optional exclusions by title --------------------------------------------
+    excluded_source_ids: set[str] = set()
+    if excluded_title_terms:
+        filtered_incoming: Dict[str, Event] = {}
+        for sid, event in incoming_by_id.items():
+            title_lc = event.title.lower()
+            if any(term in title_lc for term in excluded_title_terms):
+                excluded_source_ids.add(sid)
+                continue
+            filtered_incoming[sid] = event
+        incoming_by_id = filtered_incoming
 
-    incoming_by_id = {
-        sid: event
-        for sid, event in incoming_by_id.items()
-        if not any(ex.lower() in event.title.lower() for ex in EXCLUDED_NAMES)
-    }
+        logger.info(
+            "Excluded %d incoming event(s) by title filter (sync.exclude_title_contains).",
+            len(excluded_source_ids),
+        )
     # ---- Fetch existing Discord scheduled events ----------------------------------------
     logger.info("Fetching existing Discord scheduled events ...")
     if dry_run:
@@ -115,6 +241,8 @@ def sync(config: dict, dry_run: bool = False) -> None:
         source_id = DiscordClient.extract_source_id(de.get("description") or "")
         if source_id:
             existing_by_source_id[source_id] = de
+    matched_existing_source_ids: set[str] = set()
+    used_discord_ids: set[str] = set()
 
     created = updated = cancelled = skipped = failed = 0
 
@@ -129,13 +257,41 @@ def sync(config: dict, dry_run: bool = False) -> None:
             )
             method = "direct"
 
+        matched_discord_event = existing_by_source_id.get(source_id)
+        matched_source_id = source_id if matched_discord_event else None
+
+        if matched_discord_event is None:
+            matched_discord_event = _find_similar_existing_event(
+                event,
+                existing_discord,
+                used_discord_ids,
+                time_window_minutes=similarity_time_window_minutes,
+                min_title_ratio=similarity_min_title_ratio,
+                min_score=similarity_min_score,
+            )
+            if matched_discord_event is not None:
+                matched_source_id = DiscordClient.extract_source_id(
+                    matched_discord_event.get("description") or ""
+                )
+                logger.info(
+                    "Matched similar event for %r (incoming=%s, existing=%s)",
+                    event.title,
+                    source_id,
+                    matched_source_id,
+                )
+
         if method in _COMMAND_CREATION_METHODS:
-            if source_id in existing_by_source_id:
+            if matched_discord_event is not None:
                 logger.info(
                     "Skipping existing event in %s mode: %r",
                     method,
                     event.title,
                 )
+                if matched_source_id:
+                    matched_existing_source_ids.add(matched_source_id)
+                existing_id = matched_discord_event.get("id")
+                if existing_id:
+                    used_discord_ids.add(existing_id)
                 skipped += 1
                 continue
 
@@ -175,10 +331,13 @@ def sync(config: dict, dry_run: bool = False) -> None:
                         failed += 1
             continue
 
-        if source_id in existing_by_source_id:
-            de = existing_by_source_id[source_id]
+        if matched_discord_event is not None:
+            de = matched_discord_event
             discord_id = de["id"]
             status = de.get("status", _STATUS_SCHEDULED)
+            if matched_source_id:
+                matched_existing_source_ids.add(matched_source_id)
+            used_discord_ids.add(discord_id)
 
             if status in (_STATUS_COMPLETED, _STATUS_CANCELLED):
                 # Event was completed/cancelled in Discord but still exists in the source
@@ -211,7 +370,11 @@ def sync(config: dict, dry_run: bool = False) -> None:
 
     # ---- Cancel events that no longer appear in any source --------------------------------
     for source_id, de in existing_by_source_id.items():
-        if source_id not in incoming_by_id:
+        if source_id in excluded_source_ids:
+            skipped += 1
+            continue
+
+        if source_id not in incoming_by_id and source_id not in matched_existing_source_ids:
             existing_method = (
                 DiscordClient.extract_creation_method(de.get("description") or "")
                 or "direct"

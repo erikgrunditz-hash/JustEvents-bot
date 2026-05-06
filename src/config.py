@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _VALID_CREATION_METHODS = {"direct", "sesh", "justevent"}
+_DEFAULT_SIMILARITY_TIME_WINDOW_MINUTES = 180
+_DEFAULT_SIMILARITY_MIN_TITLE_RATIO = 0.55
+_DEFAULT_SIMILARITY_MIN_SCORE = 0.72
 
 
 def _normalise_creation_method(value: Any, *, where: str) -> str:
@@ -22,6 +25,20 @@ def _normalise_creation_method(value: Any, *, where: str) -> str:
         valid = ", ".join(sorted(_VALID_CREATION_METHODS))
         raise ValueError(f"Invalid event_creation_method at {where}: {value!r}. Expected one of: {valid}")
     return method
+
+
+def _to_int(value: Any, *, where: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid integer at {where}: {value!r}")
+
+
+def _to_float(value: Any, *, where: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid number at {where}: {value!r}")
 
 
 def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
@@ -75,8 +92,42 @@ def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
     if default_command_channel_id:
         command_cfg["default_channel_id"] = default_command_channel_id
 
+    sync_cfg = config.setdefault("sync", {})
+    similarity_cfg = sync_cfg.setdefault("similarity_matching", {})
+    time_window_minutes = _to_int(
+        similarity_cfg.get("time_window_minutes", _DEFAULT_SIMILARITY_TIME_WINDOW_MINUTES),
+        where="sync.similarity_matching.time_window_minutes",
+    )
+    if time_window_minutes <= 0:
+        raise ValueError("sync.similarity_matching.time_window_minutes must be > 0")
+
+    min_title_ratio = _to_float(
+        similarity_cfg.get("min_title_ratio", _DEFAULT_SIMILARITY_MIN_TITLE_RATIO),
+        where="sync.similarity_matching.min_title_ratio",
+    )
+    if not 0 <= min_title_ratio <= 1:
+        raise ValueError("sync.similarity_matching.min_title_ratio must be between 0 and 1")
+
+    min_score = _to_float(
+        similarity_cfg.get("min_score", _DEFAULT_SIMILARITY_MIN_SCORE),
+        where="sync.similarity_matching.min_score",
+    )
+    if not 0 <= min_score <= 1:
+        raise ValueError("sync.similarity_matching.min_score must be between 0 and 1")
+
+    similarity_cfg["time_window_minutes"] = time_window_minutes
+    similarity_cfg["min_title_ratio"] = min_title_ratio
+    similarity_cfg["min_score"] = min_score
+
+    excluded_title_terms = sync_cfg.get("exclude_title_contains", [])
+    if excluded_title_terms is None:
+        excluded_title_terms = []
+    if not isinstance(excluded_title_terms, list):
+        raise ValueError("sync.exclude_title_contains must be a list of strings")
+    sync_cfg["exclude_title_contains"] = [str(term) for term in excluded_title_terms]
+
     # Propagate global defaults to each source config that doesn't set them.
-    global_lookahead = config.get("sync", {}).get("lookahead_days", 90)
+    global_lookahead = sync_cfg.get("lookahead_days", 90)
     for source in config.get("sources", []):
         source.setdefault("lookahead_days", global_lookahead)
         # If env var is set, it overrides source config. Otherwise use source config or fall back to default.

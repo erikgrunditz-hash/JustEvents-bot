@@ -70,3 +70,17 @@ sync:
   lookahead_days: 90
   # Default method for all sources that do not specify event_creation_method.
   default_event_creation_method: "direct"
+  # Optional: skip processing events whose title contains any of these terms.
+  # Excluded events are ignored for create/update and are NOT auto-cancelled.
+  exclude_title_contains: []
+  # Example:
+  # exclude_title_contains:
+  #   - "private event"
+  # Fallback matching when source IDs drift (renames/edited text on source side).
+  similarity_matching:
+    # Max allowed start-time difference between incoming and existing Discord event.
+    time_window_minutes: 180
+    # Minimum fuzzy title similarity ratio (0..1) for non-near-in-time matches.
+    min_title_ratio: 0.55
+    # Minimum combined score (time + title) required to treat events as the same.
+    min_score: 0.72
