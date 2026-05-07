@@ -37,11 +37,17 @@ def test_format_command_omits_channel_for_sesh():
     command = format_event_create_command(_sample_event(), include_channel=False)
     assert "channel:" not in command
     assert "title: Board Games Friday" in command
+    assert "source_id:" not in command
+    assert "creation_method:" not in command
 
 
 def test_parse_command_round_trip():
     event = _sample_event()
-    command = format_event_create_command(event, include_channel=True)
+    command = format_event_create_command(
+        event,
+        include_channel=True,
+        include_metadata=True,
+    )
     parsed = parse_event_create_command(command)
 
     assert parsed["title"] == "Board Games Friday"

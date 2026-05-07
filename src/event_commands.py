@@ -5,8 +5,14 @@ from typing import Dict
 
 from src.models.event import Event
 
+_DESCRIPTION_METADATA_PREFIXES = ("source_id:", "creation_method:")
 
-def format_event_create_command(event: Event, include_channel: bool = False) -> str:
+
+def format_event_create_command(
+    event: Event,
+    include_channel: bool = False,
+    include_metadata: bool = False,
+) -> str:
     """Return a command payload compatible with Sesh-like workflows.
 
     The command is emitted as plain text so it can be copied/run manually,
@@ -17,6 +23,8 @@ def format_event_create_command(event: Event, include_channel: bool = False) -> 
         include_channel: If True, include channel:[#events] (for JustEvent mode).
                         If False, omit channel (for Sesh mode, since Sesh creates
                         events in the channel where the command was run).
+        include_metadata: If True, keep internal metadata lines (e.g. source_id)
+                        in description. For Sesh mode this should be False.
     """
     start = _to_utc(event.start_time)
     duration = event.end_time - event.start_time
@@ -24,7 +32,11 @@ def format_event_create_command(event: Event, include_channel: bool = False) -> 
         duration = timedelta(hours=2)
 
     title = _sanitize(event.title, max_len=64)
-    description = _sanitize(event.description, max_len=750)
+    description_text = event.description
+    if not include_metadata:
+        description_text = _strip_description_metadata(description_text)
+
+    description = _sanitize(description_text, max_len=750)
     location = _sanitize(event.location or "TBD", max_len=100)
     event_channel = _sanitize(event.command_target_channel or "#events", max_len=100)
     datetime_value = start.strftime("%Y-%m-%d %H:%M UTC")
@@ -120,3 +132,13 @@ def _sanitize(text: str, max_len: int) -> str:
     if len(cleaned) > max_len:
         return cleaned[: max_len - 1] + "..."
     return cleaned
+
+
+def _strip_description_metadata(text: str) -> str:
+    lines = []
+    for line in (text or "").splitlines():
+        stripped = line.strip().lower()
+        if any(stripped.startswith(prefix) for prefix in _DESCRIPTION_METADATA_PREFIXES):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()

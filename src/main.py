@@ -305,7 +305,11 @@ def sync(config: dict, dry_run: bool = False) -> None:
                 failed += 1
                 continue
 
-            command = format_event_create_command(event, include_channel=(method == "justevent"))
+            command = format_event_create_command(
+                event,
+                include_channel=(method == "justevent"),
+                include_metadata=(method == "justevent"),
+            )
             if dry_run:
                 logger.info("[DRY RUN] Would post %s command: %s", method, command)
                 created += 1
