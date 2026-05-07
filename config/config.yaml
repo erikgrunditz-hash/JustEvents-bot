@@ -70,6 +70,9 @@ sync:
   lookahead_days: 14
   # Default method for all sources that do not specify event_creation_method.
   default_event_creation_method: "sesh"
+  # Optional: skip processing events whose title contains any of these terms.
+  # Excluded events are ignored for create/update and are NOT auto-cancelled.
+  exclude_title_contains: ["Play board games with Gothenburg Boardgamers"]
   # Fallback matching when source IDs drift (renames/edited text on source side).
   similarity_matching:
     # Max allowed start-time difference between incoming and existing Discord event.
