@@ -67,7 +67,7 @@ sources:
 # -------------------------------------------------------------------------
 sync:
   # Sync events starting within this many days from now.
-  lookahead_days: 14
+  lookahead_days: 90
   # Default method for all sources that do not specify event_creation_method.
   default_event_creation_method: "sesh"
   # Optional: skip processing events whose title contains any of these terms.
